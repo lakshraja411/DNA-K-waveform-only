@@ -35,7 +35,7 @@ plt.rcParams.update({
 
 st.title("Whole-Waveform K-Means")
 st.caption(
-    "event_data waveform → silhouette k selection → K-means → blockade–dwell scatter → midpoint-aligned waveform families"
+    "event_data waveform → silhouette k selection → K-means → blockade–dwell scatter → waveform families → median overlay"
 )
 
 # ---------------------------------------------------------------------
@@ -740,5 +740,46 @@ if result is not None:
             "Download waveform PDF",
             figure_bytes(fig_w, "pdf"),
             "waveform_kmeans_family_profiles.pdf",
+            "application/pdf",
+        )
+
+
+        # ---------------------------------------------------------
+        # Plot 3: overlay of cluster median waveforms
+        # ---------------------------------------------------------
+        st.subheader("Plot 3 · Median waveform overlay")
+
+        fig_overlay, ax = plt.subplots(figsize=(9, 5.2))
+
+        for c in clusters:
+            ax.plot(
+                x,
+                medians[c]["median"],
+                linewidth=2.2,
+                label=f"Cluster {c} · n={medians[c]['n']}",
+            )
+
+        ax.set_xlabel("Time relative to event midpoint (ms)")
+        ax.set_ylabel("Median blockade (nA)")
+        ax.set_title("Overlay of median waveform families")
+        ax.legend(frameon=False)
+        fig_overlay.tight_layout()
+
+        st.pyplot(fig_overlay, use_container_width=True)
+        st.caption(
+            "Each line is the pointwise median waveform of one whole-waveform K-means cluster."
+        )
+
+        o1, o2 = st.columns(2)
+        o1.download_button(
+            "Download overlay PNG",
+            figure_bytes(fig_overlay, "png", 600),
+            "waveform_kmeans_median_overlay.png",
+            "image/png",
+        )
+        o2.download_button(
+            "Download overlay PDF",
+            figure_bytes(fig_overlay, "pdf"),
+            "waveform_kmeans_median_overlay.pdf",
             "application/pdf",
         )
