@@ -394,6 +394,13 @@ def figure_bytes(fig, fmt="png", dpi=600):
     return buf.getvalue()
 
 
+def apply_optional_limits(ax, x_min=None, x_max=None, y_min=None, y_max=None):
+    if x_min is not None or x_max is not None:
+        ax.set_xlim(left=x_min, right=x_max)
+    if y_min is not None or y_max is not None:
+        ax.set_ylim(bottom=y_min, top=y_max)
+
+
 # ---------------------------------------------------------------------
 # 1. Files
 # ---------------------------------------------------------------------
@@ -504,6 +511,72 @@ display_window = r3.slider(
     value=850,
     step=50,
 )
+
+with st.expander("Plot editing options"):
+    pedit1, pedit2, pedit3 = st.columns(3)
+
+    show_legends = pedit1.checkbox("Show legends", value=True)
+    median_coverage = pedit2.slider(
+        "Waveform median coverage fraction",
+        min_value=0.30,
+        max_value=0.95,
+        value=0.50,
+        step=0.05,
+        help=(
+            "A point on the red median curve is shown only if at least this fraction "
+            "of traces in that cluster contains data there. Higher values make the "
+            "median more conservative."
+        ),
+    )
+    max_member_traces = pedit3.slider(
+        "Grey member traces per cluster",
+        min_value=0,
+        max_value=100,
+        value=50,
+        step=5,
+    )
+
+    st.markdown("**Scatter plot text**")
+    s1, s2, s3 = st.columns(3)
+    scatter_title = s1.text_input("Scatter title", value="Whole-waveform K-means: blockade vs dwell")
+    scatter_xlabel = s2.text_input("Scatter x label", value="Event width / dwell-like duration (ms)")
+    scatter_ylabel = s3.text_input("Scatter y label", value="Blockade height (nA)")
+
+    st.markdown("**Waveform family plot text**")
+    f1, f2, f3 = st.columns(3)
+    family_title = f1.text_input("Family plot title", value="Midpoint-aligned waveform families")
+    family_xlabel = f2.text_input("Family x label", value="Time relative to event midpoint (ms)")
+    family_ylabel = f3.text_input("Family y label", value="Blockade (nA)")
+
+    st.markdown("**Overlay plot text**")
+    o1, o2, o3 = st.columns(3)
+    overlay_title = o1.text_input("Overlay title", value="Overlay of median waveform families")
+    overlay_xlabel = o2.text_input("Overlay x label", value="Time relative to event midpoint (ms)")
+    overlay_ylabel = o3.text_input("Overlay y label", value="Median blockade (nA)")
+
+    st.markdown("**Optional axis limits**")
+    lim1, lim2, lim3 = st.columns(3)
+
+    with lim1:
+        scatter_custom_limits = st.checkbox("Custom scatter limits", value=False)
+        scatter_xmin = st.number_input("Scatter x min", value=0.0, format="%.3f", disabled=not scatter_custom_limits)
+        scatter_xmax = st.number_input("Scatter x max", value=5.0, format="%.3f", disabled=not scatter_custom_limits)
+        scatter_ymin = st.number_input("Scatter y min", value=0.0, format="%.3f", disabled=not scatter_custom_limits)
+        scatter_ymax = st.number_input("Scatter y max", value=5.0, format="%.3f", disabled=not scatter_custom_limits)
+
+    with lim2:
+        family_custom_limits = st.checkbox("Custom family limits", value=False)
+        family_xmin = st.number_input("Family x min", value=-2.0, format="%.3f", disabled=not family_custom_limits)
+        family_xmax = st.number_input("Family x max", value=2.0, format="%.3f", disabled=not family_custom_limits)
+        family_ymin = st.number_input("Family y min", value=-1.0, format="%.3f", disabled=not family_custom_limits)
+        family_ymax = st.number_input("Family y max", value=5.0, format="%.3f", disabled=not family_custom_limits)
+
+    with lim3:
+        overlay_custom_limits = st.checkbox("Custom overlay limits", value=False)
+        overlay_xmin = st.number_input("Overlay x min", value=-2.0, format="%.3f", disabled=not overlay_custom_limits)
+        overlay_xmax = st.number_input("Overlay x max", value=2.0, format="%.3f", disabled=not overlay_custom_limits)
+        overlay_ymin = st.number_input("Overlay y min", value=-1.0, format="%.3f", disabled=not overlay_custom_limits)
+        overlay_ymax = st.number_input("Overlay y max", value=5.0, format="%.3f", disabled=not overlay_custom_limits)
 
 st.caption(
     "For large datasets, speed comes mainly from sampling the silhouette calculation and using fewer initialisations during the k scan. "
@@ -628,10 +701,13 @@ if result is not None:
             label=f"Cluster {c} · n={len(g)}",
         )
 
-    ax.set_xlabel("Event width / dwell-like duration (ms)")
-    ax.set_ylabel("Blockade height (nA)")
-    ax.set_title("Whole-waveform K-means: blockade vs dwell")
-    ax.legend(frameon=False)
+    ax.set_xlabel(scatter_xlabel)
+    ax.set_ylabel(scatter_ylabel)
+    ax.set_title(scatter_title)
+    if scatter_custom_limits:
+        apply_optional_limits(ax, scatter_xmin, scatter_xmax, scatter_ymin, scatter_ymax)
+    if show_legends:
+        ax.legend(frameon=False)
     fig_bd.tight_layout()
 
     st.pyplot(fig_bd, use_container_width=True)
@@ -665,7 +741,7 @@ if result is not None:
         window_samples=int(result["display_window"]),
     )
 
-    medians = pointwise_cluster_medians(info, 0.50) if info is not None else {}
+    medians = pointwise_cluster_medians(info, float(median_coverage)) if info is not None else {}
 
     if not medians:
         st.warning("No matched event-fitting traces were available for the waveform-family plot.")
@@ -693,7 +769,7 @@ if result is not None:
             item = medians[c]
             members = item["members"]
 
-            show_n = min(50, len(members))
+            show_n = min(int(max_member_traces), len(members))
             if show_n:
                 step = max(1, len(members) // show_n)
                 sample = members[::step][:show_n]
@@ -716,17 +792,20 @@ if result is not None:
             )
 
             ax.set_title(f"Cluster {c} · n={item['n']}")
-            ax.set_xlabel("Time relative to event midpoint (ms)")
-            ax.set_ylabel("Blockade (nA)")
-            ax.legend(frameon=False)
+            ax.set_xlabel(family_xlabel)
+            ax.set_ylabel(family_ylabel)
+            if family_custom_limits:
+                apply_optional_limits(ax, family_xmin, family_xmax, family_ymin, family_ymax)
+            if show_legends:
+                ax.legend(frameon=False)
 
-        fig_w.suptitle("Midpoint-aligned waveform families", y=1.01)
+        fig_w.suptitle(family_title, y=1.01)
         fig_w.tight_layout()
 
         st.pyplot(fig_w, use_container_width=True)
         st.caption(
-            "Grey = measured member traces. Red = pointwise median. "
-            "The median is shown only where at least 50% of the family has data."
+            f"Grey = measured member traces. Red = pointwise median. "
+            f"The median is shown only where at least {100*float(median_coverage):.0f}% of the family has data."
         )
 
         d1, d2 = st.columns(2)
@@ -759,10 +838,13 @@ if result is not None:
                 label=f"Cluster {c} · n={medians[c]['n']}",
             )
 
-        ax.set_xlabel("Time relative to event midpoint (ms)")
-        ax.set_ylabel("Median blockade (nA)")
-        ax.set_title("Overlay of median waveform families")
-        ax.legend(frameon=False)
+        ax.set_xlabel(overlay_xlabel)
+        ax.set_ylabel(overlay_ylabel)
+        ax.set_title(overlay_title)
+        if overlay_custom_limits:
+            apply_optional_limits(ax, overlay_xmin, overlay_xmax, overlay_ymin, overlay_ymax)
+        if show_legends:
+            ax.legend(frameon=False)
         fig_overlay.tight_layout()
 
         st.pyplot(fig_overlay, use_container_width=True)

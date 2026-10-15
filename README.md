@@ -6,6 +6,7 @@ This stripped-down app contains only:
 3. Silhouette-based k selection
 4. Blockade-vs-dwell scatter
 5. Midpoint-aligned waveform family plot
+6. Overlay of the cluster median waveforms
 
 For speed on large recordings:
 - K-means always fits all matched events.
